@@ -23,7 +23,6 @@ from __future__ import absolute_import
 from six.moves import filter
 #force filter to be a generator # like in py3
 
-
 import array
 import copy
 import itertools
@@ -34,6 +33,7 @@ import madgraph.various.misc as misc
 from madgraph import InvalidCmd, MadGraph5Error
 from six.moves import range
 from six.moves import zip
+from six.moves import filter
 
 logger = logging.getLogger('madgraph.diagram_generation')
 
@@ -377,8 +377,19 @@ class DiagramTagChainLink(object):
                 return True
             elif isinstance(self.vertex_id[0], tuple) and isinstance(other.vertex_id[0], int):
                 return False
+            elif isinstance(self.vertex_id[0], str) and isinstance(other.vertex_id[0], tuple):
+                return True
+            elif isinstance(self.vertex_id[0], tuple) and isinstance(other.vertex_id[0], str):
+                return False            
             else:
-                return self.vertex_id[0] < other.vertex_id[0]
+                try:
+                    return self.vertex_id[0] < other.vertex_id[0]
+                except TypeError as error:
+                    if error.args == "'<' not supported between instances of 'tuple' and 'str'":
+                        return False
+                    else:
+                        return True
+                    
 
         for i, link in enumerate(self.links):
             if i > len(other.links) - 1:
@@ -563,7 +574,7 @@ class Amplitude(base_objects.PhysicsObject):
                                      process.get('overall_orders')[key])
             except KeyError:
                 process.get('orders')[key] = process.get('overall_orders')[key]
-
+                
         assert model.get('particles'), \
            "particles are missing in model: %s" %  model.get('particles')
 
@@ -1664,10 +1675,12 @@ class MultiProcess(base_objects.PhysicsObject):
                                     "%s not valid ProcessDefinition object" % \
                                     repr(process_definition)
 
-        # Set automatic coupling orders
-        process_definition.set('orders', MultiProcess.\
+        # Set automatic coupling orders if born_sq_orders are not specified
+        # otherwise skip
+        if not process_definition['born_sq_orders']:
+            process_definition.set('orders', MultiProcess.\
                                find_optimal_process_orders(process_definition,
-                               diagram_filter))
+                                                           diagram_filter))
         # Check for maximum orders from the model
         process_definition.check_expansion_orders()
 

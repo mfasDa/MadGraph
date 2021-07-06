@@ -198,10 +198,7 @@ def import_model_from_db(model_name, local_dir=False):
         raise Exception("Impossible to unpack the model. Please install it manually")
     return True
 
-def import_model(model_name, decay=False, restrict=True, prefix='mdl_',
-                                                    complex_mass_scheme = None):
-    """ a practical and efficient way to import a model"""
-    
+def get_path_restrict(model_name, restrict=True):
     # check if this is a valid path or if this include restriction file       
     try:
         model_path = find_ufo_path(model_name)
@@ -240,6 +237,14 @@ def import_model(model_name, decay=False, restrict=True, prefix='mdl_',
                 restrict_file = restrict
             else:
                 raise Exception("%s is not a valid path for restrict file" % restrict)
+    
+    return model_path, restrict_file, restrict_name
+
+def import_model(model_name, decay=False, restrict=True, prefix='mdl_',
+                                                    complex_mass_scheme = None):
+    """ a practical and efficient way to import a model"""
+    
+    model_path, restrict_file, restrict_name = get_path_restrict(model_name, restrict)
     
     #import the FULL model
     model = import_full_model(model_path, decay, prefix)
@@ -794,8 +799,11 @@ class UFOMG5Converter(object):
             # MG5 doesn't use goldstone boson 
             if hasattr(particle_info, 'GoldstoneBoson') and particle_info.GoldstoneBoson:
                 return
+            if hasattr(particle_info, 'goldstoneboson') and particle_info.goldstoneboson:
+                return
             elif hasattr(particle_info, 'goldstone') and particle_info.goldstone:
-                return      
+                return
+                  
         # Initialize a particles
         particle = base_objects.Particle()
 
@@ -1011,7 +1019,7 @@ class UFOMG5Converter(object):
                   the value of the pole. In the current implementation, this is
                   just to see if the pole is zero or not.
             """
-
+            
             if isinstance(CTCoupling.value,dict):
                 if -pole in list(CTCoupling.value.keys()):
                     return CTCoupling.value[-pole], [], 0
@@ -1071,7 +1079,9 @@ class UFOMG5Converter(object):
                     # attribute defined, but it is better to make sure.
                     if hasattr(self.model, 'map_CTcoup_CTparam'):
                         self.model.map_CTcoup_CTparam[couplname] = CTparamNames
+            
 
+                    
             # Finally modify the value of this CTCoupling so that it is no
             # longer a string expression in terms of CTParameters but rather
             # a dictionary with the CTparameters replaced by their _FIN_ and
@@ -1082,6 +1092,13 @@ class UFOMG5Converter(object):
             if new_value:
                 coupl.old_value = coupl.value
                 coupl.value = new_value
+
+        for CTparam in all_CTparameters:
+            if CTparam.name not in self.model.map_CTcoup_CTparam:
+                if not hasattr(self.model, "notused_ct_params"):
+                    self.model.notused_ct_params = [CTparam.name.lower()]
+                else:
+                    self.model.notused_ct_params.append(CTparam.name.lower())
 
     def add_CTinteraction(self, interaction, color_info):
         """ Split this interaction in order to call add_interaction for
@@ -1970,6 +1987,21 @@ class RestrictModel(model_reader.ModelReader):
                     self['parameter_dict'][parameter.name[4:]] = 'auto'
                 else:
                     raise Exception
+
+        # delete cache for coupling_order if some coupling are not present in the model anymore
+        old_order = self['coupling_orders']
+        self['coupling_orders'] = None
+        if old_order and old_order != self.get('coupling_orders'):
+            removed = set(old_order).difference(set(self.get('coupling_orders')))
+            logger.warning("Some coupling order do not have any coupling associated to them: %s", list(removed))
+            logger.warning("Those coupling order will not be valid anymore for this model")
+
+            self['order_hierarchy'] = {}
+            self['expansion_order'] = None
+            #and re-initialize it to avoid any potential side effect
+            self.get('order_hierarchy')
+            self.get('expansion_order')
+
 
 
         

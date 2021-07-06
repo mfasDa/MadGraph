@@ -114,14 +114,14 @@ class TestMECmdShell(unittest.TestCase):
 
         if not os.path.exists(pjoin(MG5DIR, 'pythia-pgs')):
             print("install pythia-pgs")
-            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5')],
+            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5_aMC')],
                              stdin=subprocess.PIPE,
                              stdout=stdout,stderr=stderr)
             out = p.communicate('install pythia-pgs'.encode())
         misc.compile(cwd=pjoin(MG5DIR,'pythia-pgs'))
         if not os.path.exists(pjoin(MG5DIR, 'MadAnalysis')):
             print("install MadAnalysis")
-            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5')],
+            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5_aMC')],
                              stdin=subprocess.PIPE,
                              stdout=stdout,stderr=stderr)
             out = p.communicate('install MadAnalysis4'.encode())
@@ -214,7 +214,7 @@ class TestMECmdShell(unittest.TestCase):
         # Make sure that there is significantly more events in the ptj tail
         self.assertGreater(biased_median_ptj,5.0*unbiased_median_ptj)
         # Make sure that the cross-section is close enough for the bias and unbiased samples
-        self.assertLess((abs(biased_events.cross-unbiased_events.cross)/abs(unbiased_events.cross)),0.03)
+        self.assertLess((abs(biased_events.cross-unbiased_events.cross)/abs(unbiased_events.cross)),0.1)
 
     def test_madspin_gridpack(self):
 
@@ -484,7 +484,7 @@ class TestMECmdShell(unittest.TestCase):
         val1 = self.cmd_line.results.current['cross']
         err1 = self.cmd_line.results.current['error']
         
-        target = 3932.0
+        target = 3978.0
         self.assertTrue(abs(val1 - target) / err1 < 1., 'large diference between %s and %s +- %s'%
                         (target, val1, err1))
         
@@ -731,7 +731,7 @@ class TestMEfromfile(unittest.TestCase):
             stdout=devnull
             stderr=devnull
         if not os.path.exists(pjoin(MG5DIR, 'pythia-pgs')):
-            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5')],
+            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5_aMC')],
                              stdin=subprocess.PIPE,
                              stdout=stdout,stderr=stderr)
             out = p.communicate('install pythia-pgs'.encode())
@@ -766,7 +766,7 @@ class TestMEfromfile(unittest.TestCase):
             devnull =open(os.devnull,'w')
             stdout=devnull
             stderr=devnull
-        subprocess.call([pjoin(_file_path, os.path.pardir,'bin','mg5'), 
+        subprocess.call([pjoin(_file_path, os.path.pardir,'bin','mg5_aMC'), 
                          pjoin(self.path, 'mg5_cmd')],
                          #cwd=self.path,
                         stdout=stdout, stderr=stderr)
@@ -807,7 +807,7 @@ class TestMEfromfile(unittest.TestCase):
             stderr=devnull
 
         if not os.path.exists(pjoin(MG5DIR, 'pythia-pgs')):
-            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5')],
+            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5_aMC')],
                              stdin=subprocess.PIPE,
                              stdout=stdout,stderr=stderr)
             out = p.communicate('install pythia-pgs'.encode())
@@ -832,7 +832,8 @@ class TestMEfromfile(unittest.TestCase):
         pythia=ON
         %(path)s/../madspin_card.dat
         set nevents 1000
-        set pdlabel cteq6l1
+        set lhaid 10042
+        set pdlabel lhapdf
         launch -i
         decay_events run_01 
         %(path)s/../madspin_card2.dat
@@ -852,7 +853,7 @@ class TestMEfromfile(unittest.TestCase):
         """)
         fsock.close()
                 
-        subprocess.call([pjoin(_file_path, os.path.pardir,'bin','mg5'), 
+        subprocess.call([pjoin(_file_path, os.path.pardir,'bin','mg5_aMC'), 
                          pjoin(self.path, 'cmd')],
                          cwd=pjoin(_file_path, os.path.pardir),
                         stdout=stdout,stderr=stdout)     
@@ -888,7 +889,7 @@ class TestMEfromfile(unittest.TestCase):
             stderr=devnull
 
         if not os.path.exists(pjoin(MG5DIR, 'pythia-pgs')):
-            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5')],
+            p = subprocess.Popen([pjoin(MG5DIR,'bin','mg5_aMC')],
                              stdin=subprocess.PIPE,
                              stdout=stdout,stderr=stderr)
             out = p.communicate('install pythia-pgs'.encode())
@@ -903,7 +904,7 @@ class TestMEfromfile(unittest.TestCase):
                     {'dir_name': self.run_dir, 'mg5_path':pjoin(_file_path, os.path.pardir)})
         fsock.close()
 
-        subprocess.call([pjoin(_file_path, os.path.pardir,'bin','mg5'), 
+        subprocess.call([pjoin(_file_path, os.path.pardir,'bin','mg5_aMC'), 
                          pjoin(self.path, 'test_mssm_generation')],
                          #cwd=pjoin(self.path),
                         stdout=stdout,stderr=stdout)

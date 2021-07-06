@@ -103,7 +103,6 @@ class LoopExporterFortran(object):
         """Initiate the LoopExporterFortran with directory information on where
         to find all the loop-related source files, like CutTools"""
 
-
         self.opt = dict(self.default_opt)
         if opt:
             self.opt.update(opt)
@@ -201,6 +200,15 @@ class LoopExporterFortran(object):
         """
         if not hasattr(self, 'aloha_model'):
             self.aloha_model = create_aloha.AbstractALOHAModel(model.get('modelpath'))
+
+        missing_lor = []
+        for lor in model.get('lorentz'):
+            if not hasattr(self.aloha_model.model.lorentz, lor.name):
+                missing_lor.append(lor)
+        if missing_lor:
+            logger.debug("adding in aloha model %s lorentz struct" % len(missing_lor))
+            self.aloha_model.add_Lorentz_object(missing_lor)
+        
         return self.aloha_model
 
     #===========================================================================
@@ -2297,9 +2305,10 @@ class LoopProcessOptimizedExporterFortranSA(LoopProcessExporterFortranSA):
                 final_lwf = lamp.get_final_loop_wavefunction()
                 while not final_lwf is None:
                     # We define here an HEFT vertex as any vertex built up from
-                    # only massless vectors and scalars (at least one of each)
+                    # only massless vectors and massive scalars (at least one of each)
+                    # We ask for massive scalars in part to remove the gluon ghost false positive.
                     scalars = len([1 for wf in final_lwf.get('mothers') if 
-                                                             wf.get('spin')==1])
+                                    wf.get('spin')==1 and wf.get('mass')!='ZERO'])
                     vectors = len([1 for wf in final_lwf.get('mothers') if 
                                   wf.get('spin')==3 and wf.get('mass')=='ZERO'])
                     if scalars>=1 and vectors>=1 and \
@@ -3087,6 +3096,11 @@ class LoopInducedExporterME(LoopProcessOptimizedExporterFortranSA):
         """ Initialize the process, setting the proc characteristics."""
         super(LoopInducedExporterME, self).__init__(*args, **opts)
         self.proc_characteristic['loop_induced'] = True
+
+        if self.opt and isinstance(self.opt['output_options'], dict) and \
+                                       't_strategy' in self.opt['output_options']:
+            self.opt['t_strategy'] = banner_mod.ConfigFile.format_variable(
+                  self.opt['output_options']['t_strategy'], int, 't_strategy')
     
     def get_context(self,*args,**opts):
         """ Make sure that the contextual variable MadEventOutput is set to

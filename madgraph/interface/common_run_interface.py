@@ -907,9 +907,12 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
                 fsock.close()
                 return
             else:
-                subprocess.call(['python', 'write_param_card.py'],
-                             cwd=pjoin(self.me_dir,'bin','internal','ufomodel'))
+                devnull = open(os.devnull, 'w')  
+                subprocess.call([sys.executable, 'write_param_card.py'],
+                             cwd=pjoin(self.me_dir,'bin','internal','ufomodel'), stdout=devnull, stderr=devnull)
                 default = pjoin(self.me_dir,'bin','internal','ufomodel','param_card.dat')
+                if not os.path.exists(default):
+                    files.cp(pjoin(self.me_dir, 'Cards','param_card_default.dat'), default)
 
 
             if amcatnlo and not keepwidth:
@@ -937,19 +940,28 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
                 #raise Exception, "%s %s %s" % (sys.path, os.path.exists(pjoin(self.me_dir,'bin','internal', 'ufomodel')), os.listdir(pjoin(self.me_dir,'bin','internal', 'ufomodel')))
                 import ufomodel as ufomodel
                 zero = ufomodel.parameters.ZERO
-                no_width = [p for p in ufomodel.all_particles
-                        if (str(p.pdg_code) in pids or str(-p.pdg_code) in pids)
-                           and p.color != 1 and p.width != zero]
+                if self.proc_characteristics['nlo_mixed_expansion']:
+                    no_width = [p for p in ufomodel.all_particles
+                            if (str(p.pdg_code) in pids or str(-p.pdg_code) in pids)
+                            and p.width != zero]
+                else:
+                    no_width = [p for p in ufomodel.all_particles
+                            if (str(p.pdg_code) in pids or str(-p.pdg_code) in pids)
+                            and p.width != zero and p.color!=1]
+
                 done = []
                 for part in no_width:
                     if abs(part.pdg_code) in done:
                         continue
                     done.append(abs(part.pdg_code))
-                    param = param_card['decay'].get((part.pdg_code,))
+                    try:
+                        param = param_card['decay'].get((part.pdg_code,))
+                    except KeyError:
+                        continue
 
                     if  param.value != 0:
-                        logger.info('''For gauge cancellation, the width of \'%s\' has been set to zero.'''\
-                                    % part.name,'$MG:BOLD')
+                        logger.info('''For gauge cancellation, the width of \'%s\' has been set to zero.''',
+                                     part.name,'$MG:BOLD')
                         param.value = 0
 
             param_card.write_inc_file(outfile, ident_card, default)
@@ -2457,7 +2469,7 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
                                                      LoggerStream=logstream,forced=forced, 
                                                      no_compilation=not compilation)
         except Exception as e:
-            if six.PY3:
+            if six.PY3 and not __debug__:
                 logger.info('MadAnalysis5 instalation not python3 compatible')
                 return None
             logger.warning('MadAnalysis5 failed to start so that MA5 analysis will be skipped.')
@@ -3052,7 +3064,7 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
         subproc = [l.strip() for l in open(pjoin(self.me_dir,'SubProcesses',
                                                                  'subproc.mg'))]
         nb_init = self.ninitial
-        pat = re.compile(r'''DATA \(IDUP\(I,\d+\),I=1,\d+\)/([\+\-\d,\s]*)/''', re.I)
+        pat = re.compile(r'''DATA \(IDUP\(ILH|I,\d+\),ILH|I=1,\d+\)/([\+\-\d,\s]*)/''', re.I)
         for Pdir in subproc:
             text = open(pjoin(self.me_dir, 'SubProcesses', Pdir, 'born_leshouche.inc')).read()
             group = pat.findall(text)
@@ -3298,7 +3310,8 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
                 if cluster_class:
                     self.cluster = cluster_class(**self.options)
                 else:
-                    raise self.InvalidCmd("%s is not recognized as a supported cluster format." % cluster_name)              
+                    raise self.InvalidCmd("%s is not recognized as a supported cluster format." % cluster_name)     
+                         
     def check_param_card(self, path, run=True, dependent=False):
         """
         1) Check that no scan parameter are present
@@ -3967,7 +3980,7 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
         return self.deal_multiple_categories(completion, formatting)
         
 
-    def update_make_opts(self):
+    def update_make_opts(self, run_card=None):
         """update the make_opts file writing the environmental variables
         stored in make_opts_var"""
         make_opts = os.path.join(self.me_dir, 'Source', 'make_opts')
@@ -3981,6 +3994,14 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
             self.make_opts_var['PYTHIA8_PATH']=self.options['pythia8_path']
 
         self.make_opts_var['MG5AMC_VERSION'] = misc.get_pkg_info()['version']
+
+        if run_card and run_card.LO:
+            if __debug__ and 'global_flag' not in run_card.user_set:
+                self.make_opts_var['GLOBAL_FLAG'] = "-O -fbounds-check"
+            else:
+                self.make_opts_var['GLOBAL_FLAG'] = run_card['global_flag']     
+            self.make_opts_var['ALOHA_FLAG'] = run_card['aloha_flag']     
+            self.make_opts_var['MATRIX_FLAG'] = run_card['matrix_flag']
 
         return self.update_make_opts_full(make_opts, self.make_opts_var)
 
@@ -4031,6 +4052,7 @@ class CommonRunCmd(HelpToCmd, CheckValidForCmd, cmd.Cmd):
             with open(make_opts, 'w') as fsock: 
                 fsock.write(content_variables + '\n'.join(content))
         return       
+
 
 
 # lhapdf-related functions
@@ -5924,6 +5946,16 @@ class AskforEditCard(cmd.OneLinePathCompletion):
                         "As your process seems to be impacted by the issue,\n" +\
                       "You can NOT run with MLM matching/merging. Please check if merging outside MG5aMC are suitable or refrain to use merging with this model") 
                 
+        # 
+        if self.run_card and isinstance(self.run_card,banner_mod.RunCardLO):
+            if not 'sde_strategy' in self.run_card.user_set:
+                if proc_charac['single_color']:
+                    self.run_card['SDE_strategy'] = 2
+                else:
+                    self.run_card['SDE_strategy'] = 1
+                logger.debug("set SDE to %s", self.run_card['SDE_strategy'])
+            else:
+                 logger.debug("keep SDE to %s", self.run_card['SDE_strategy'])
 
         ########################################################################
         #       NLO specific check
@@ -5977,13 +6009,13 @@ class AskforEditCard(cmd.OneLinePathCompletion):
                         logger.error("ptj cut [in run_card: %s] is more than half the value of QCUT [shower_card: %s] This is not recommended:\n see http://amcatnlo.web.cern.ch/amcatnlo/FxFx_merging.htm ",
                                      self.run_card['ptj'], self.shower_card['qcut'])
                         
-                if self.shower_card['njmax'] == -1:
-                    if not proc_charac: #shoud not happen in principle 
-                        raise Exception( "Impossible to setup njmax automatically. Please setup that value manually.")
-                    njmax = proc_charac['max_n_matched_jets']
-                    self.do_set('shower_card njmax %i' % njmax) 
-                if self.shower_card['njmax'] == 0:
-                    raise Exception("Invalid njmax parameter. Can not be set to 0")
+                    if self.shower_card['njmax'] == -1:
+                        if not proc_charac: #shoud not happen in principle 
+                            raise Exception( "Impossible to setup njmax automatically. Please setup that value manually.")
+                        njmax = proc_charac['max_n_matched_jets']
+                        self.do_set('shower_card njmax %i' % njmax) 
+                    if self.shower_card['njmax'] == 0:
+                        raise Exception("Invalid njmax parameter. Can not be set to 0")
                     
                 
        
@@ -6024,7 +6056,7 @@ class AskforEditCard(cmd.OneLinePathCompletion):
 
                 # This precompiler flag is in principle useful for the analysis if it writes HEPMC
                 # events, but there is unfortunately no way for now to specify it in the shower_card.
-                supports_HEPMCHACK = '-DHEPMC2HACK' in stdout
+                supports_HEPMCHACK = '-DHEPMC2HACK' in stdout.decode()
                 
                 #3. ensure that those flag are in the shower card
                 for L in paths:
@@ -6499,6 +6531,7 @@ class AskforEditCard(cmd.OneLinePathCompletion):
         except InvalidCmd as error:
             logger.error("Invalid command: %s " % error)
         else:
+            self.reload_card(path)
             if hasattr(self, 'run_card'):
                 for pid, info in out.items():
                     total = 0
@@ -6852,6 +6885,7 @@ class AskforEditCard(cmd.OneLinePathCompletion):
             logger.info('AsPerGe creates the file succesfully')
         files.mv(card, '%s.beforeasperge' % card)
         files.mv('%s.new' % card, card)
+        self.reload_card(card)
 
 
 

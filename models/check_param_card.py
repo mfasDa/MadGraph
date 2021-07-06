@@ -127,6 +127,7 @@ class Parameter (object):
         if not precision:
             precision = 6
         
+        self.comment = self.comment.strip()
         if format == 'float':
             if self.lhablock == 'decay' and not isinstance(self.value,six.string_types):
                 return 'DECAY %s %.{0}e # %s'.format(precision) % (' '.join([str(d) for d in self.lhacode]), self.value, self.comment)
@@ -645,7 +646,8 @@ class ParamCard(dict):
                                                           (block, lhaid, value))
             else:
                 value =defaultcard[block].get(tuple(lhaid)).value
-                logger.warning('information about \"%s %s" is missing (full block missing) using default value: %s.' %\
+                if block != 'loop':
+                    logger.warning('information about \"%s %s" is missing (full block missing) using default value: %s.' %\
                                    (block, lhaid, value))
             value = str(value).lower()
             #special handling for negative mass -> set width negative
@@ -887,6 +889,11 @@ class ParamCardMP(ParamCard):
                     value = self[block].get(tuple(lhaid)).value
                 except KeyError:
                     value =defaultcard[block].get(tuple(lhaid)).value
+            elif block == 'loop' and lhaid == [1]:
+                try:
+                    value =defaultcard[block].get(tuple(lhaid)).value
+                except:
+                    value = 9.1188    
             else:
                 value =defaultcard[block].get(tuple(lhaid)).value
             #value = str(value).lower()

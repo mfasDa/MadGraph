@@ -279,7 +279,7 @@ class OneResult(object):
         
         if isinstance(filepath, str):
             finput = open(filepath)
-        elif isinstance(filepath, file):
+        elif hasattr(filepath, 'read') and hasattr(filepath, 'name'):
             finput = filepath
         else:
             raise Exception("filepath should be a path or a file descriptor")
@@ -764,6 +764,9 @@ def collect_result(cmd, folder_names=[], jobs=None, main_dir=None):
     except Exception as error:
         logger.debug(str(error))
         pass
+
+    for x in all_channels:
+        x.timing = 0
 
     return all
 
